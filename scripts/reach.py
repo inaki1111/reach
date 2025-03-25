@@ -12,12 +12,10 @@ class UR5ReachNode(Node):
     def __init__(self):
         super().__init__('ur5_reach_inference')
 
-        # Modelo ONNX cargado
         self.model_path = str(files("scripts").joinpath("policy.onnx"))
         self.session = ort.InferenceSession(self.model_path)
         self.input_name = self.session.get_inputs()[0].name
 
-        # Suscribirse a /joint_states
         self.joint_names = [
             "shoulder_pan_joint", "shoulder_lift_joint", "elbow_joint",
             "wrist_1_joint", "wrist_2_joint", "wrist_3_joint"
@@ -30,10 +28,8 @@ class UR5ReachNode(Node):
         self.subscription = self.create_subscription(
             JointState, '/joint_states', self.joint_state_callback, 10)
 
-        # Publicador de comandos
-        self.cmd_pub = self.create_publisher(Float64MultiArray, '/forward_position_controller/commands', 10)
+        self.cmd_pub = self.create_publisher(Float64MultiArray, '/scaled_joint_trajectory_controller/joint_trajectory', 10)
 
-        # Lista de objetivos (posición + orientación cuaternión)
         self.goal_poses = [
             [0.5, 0.0, 0.3, 0.0, 0.0, 0.0, 1.0],
             [0.4, 0.2, 0.4, 0.0, 0.0, 0.0, 1.0],
@@ -64,7 +60,6 @@ class UR5ReachNode(Node):
             rclpy.shutdown()
             return
 
-        # Construir la observación con padding a 37 elementos
         goal = self.goal_poses[self.current_goal_index]
 
         obs_joint_pos = np.zeros(8)
