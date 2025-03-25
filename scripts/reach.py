@@ -89,24 +89,31 @@ class UR5ReachNode(Node):
         # Inferencia con el modelo
         action = self.session.run(None, {self.input_name: observation})[0].squeeze()
 
+        # Suavizar la acción
+        scaled_action = action * 0.5
+
         # Crear mensaje JointTrajectory
         trajectory_msg = JointTrajectory()
         trajectory_msg.joint_names = self.joint_names
 
         point = JointTrajectoryPoint()
-        point.positions = (self.joint_pos + action).tolist()
-        point.time_from_start = Duration(sec=1)
+        point.positions = (self.joint_pos + scaled_action).tolist()
+
+        # Calcular duración en función de la magnitud de la acción
+        action_norm = np.linalg.norm(scaled_action)
+        duration_sec = min(max(action_norm * 2.0, 1.0), 5.0)
+        point.time_from_start = Duration(sec=int(duration_sec))
 
         trajectory_msg.points.append(point)
         self.cmd_pub.publish(trajectory_msg)
 
         # Actualizar última acción
-        self.last_action = action
+        self.last_action = scaled_action
 
         # Logs
         self.get_logger().info(f"Moviendo al objetivo {self.current_goal_index + 1}")
         self.get_logger().info(f"Posición actual: {self.joint_pos}")
-        self.get_logger().info(f"Acción aplicada: {action}")
+        self.get_logger().info(f"Acción aplicada: {scaled_action}")
         self.current_goal_index += 1
 
 def main(args=None):
