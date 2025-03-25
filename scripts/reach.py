@@ -2,9 +2,10 @@
 
 import rclpy
 from rclpy.node import Node
+from rclpy.duration import Duration
 from sensor_msgs.msg import JointState
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
-from builtin_interfaces.msg import Duration
+from builtin_interfaces.msg import Duration as MsgDuration
 from geometry_msgs.msg import PoseStamped
 from tf2_ros import Buffer, TransformListener
 import tf2_geometry_msgs
@@ -12,7 +13,6 @@ import numpy as np
 import onnxruntime as ort
 from scipy.spatial.transform import Rotation as R
 from importlib.resources import files
-from builtin_interfaces.msg import Duration as MsgDuration
 
 class UR5ReachNode(Node):
     def __init__(self):
@@ -44,8 +44,8 @@ class UR5ReachNode(Node):
         # Objetivos en tool0
         self.goal_poses_tool0 = [
             [-0.138, -0.5045, 0.08998, 0.029, 3.1, -0.54],
-            [-0.141, -0.65638, -0.14177, 0.028, 3.099, -0.90],
-            [-0.13351, -0.09202, 0.66481, 0.008, 2.33, -2.093],
+            #[-0.141, -0.65638, -0.14177, 0.028, 3.099, -0.90],
+            #[-0.13351, -0.09202, 0.66481, 0.008, 2.33, -2.093],
         ]
         self.current_goal_index = 0
         self.timer = self.create_timer(3.0, self.control_loop)
@@ -65,7 +65,7 @@ class UR5ReachNode(Node):
 
         pose_stamped = PoseStamped()
         pose_stamped.header.frame_id = "tool0"
-        pose_stamped.header.stamp = self.get_clock().now().to_msg()
+        pose_stamped.header.stamp = rclpy.time.Time().to_msg()  # Tiempo 0 = último disponible
         pose_stamped.pose.position.x = x
         pose_stamped.pose.position.y = y
         pose_stamped.pose.position.z = z
@@ -76,9 +76,9 @@ class UR5ReachNode(Node):
 
         try:
             tfed = self.tf_buffer.transform(
-            pose_stamped, 
-            "base_link", 
-            timeout=MsgDuration(sec=1)
+                pose_stamped,
+                "base_link",
+                timeout=Duration(seconds=1.0)
             )
             return [
                 tfed.pose.position.x,
@@ -135,7 +135,7 @@ class UR5ReachNode(Node):
         point = JointTrajectoryPoint()
         point.positions = (self.joint_pos + scaled_action).tolist()
         duration_sec = min(max(np.linalg.norm(scaled_action) * 2.0, 1.0), 5.0)
-        point.time_from_start = Duration(sec=int(duration_sec))
+        point.time_from_start = MsgDuration(sec=int(duration_sec))
         trajectory_msg.points.append(point)
         self.cmd_pub.publish(trajectory_msg)
 
