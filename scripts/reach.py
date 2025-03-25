@@ -12,6 +12,7 @@ import numpy as np
 import onnxruntime as ort
 from scipy.spatial.transform import Rotation as R
 from importlib.resources import files
+from builtin_interfaces.msg import Duration as MsgDuration
 
 class UR5ReachNode(Node):
     def __init__(self):
@@ -64,7 +65,7 @@ class UR5ReachNode(Node):
 
         pose_stamped = PoseStamped()
         pose_stamped.header.frame_id = "tool0"
-        pose_stamped.header.stamp = rclpy.time.Time().to_msg()
+        pose_stamped.header.stamp = self.get_clock().now().to_msg()
         pose_stamped.pose.position.x = x
         pose_stamped.pose.position.y = y
         pose_stamped.pose.position.z = z
@@ -74,7 +75,11 @@ class UR5ReachNode(Node):
         pose_stamped.pose.orientation.w = quat[3]
 
         try:
-            tfed = self.tf_buffer.transform(pose_stamped, "base_link", timeout=rclpy.duration.Duration(seconds=1.0).to_msg())
+            tfed = self.tf_buffer.transform(
+            pose_stamped, 
+            "base_link", 
+            timeout=MsgDuration(sec=1)
+            )
             return [
                 tfed.pose.position.x,
                 tfed.pose.position.y,
