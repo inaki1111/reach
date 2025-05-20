@@ -1,31 +1,37 @@
-from setuptools import find_packages, setup
+from setuptools import setup, find_packages
 
 package_name = 'reach'
 
 setup(
     name=package_name,
-    version='0.0.0',
+    version='0.1.0',
     packages=find_packages(exclude=['test']),
-    include_package_data=True,  # Asegura que se incluyan los archivos listados en package_data
     package_data={
-        # Indica que en el paquete 'scripts' se incluya el archivo 'policy.pt'
-        'scripts': ['policy.onnx'],
+        'reach': ['policy.onnx', 'policy.pt'],
     },
     data_files=[
-        ('share/ament_index/resource_index/packages',
-         ['resource/' + package_name]),
+        # Marca este paquete en el índice ament
+        ('share/ament_index/resource_index/packages', ['resource/reach']),
+        # Copia package.xml al install space
         ('share/' + package_name, ['package.xml']),
     ],
-    install_requires=['setuptools'],
+    install_requires=[
+        'setuptools',
+        'torch',
+        'numpy',
+        'pin',
+    ],
     zip_safe=True,
-    maintainer='inaki',
-    maintainer_email='inakirm111@gmail.com',
-    description='TODO: Package description',
-    license='TODO: License declaration',
-    tests_require=['pytest'],
+    author='inaki',
+    author_email='inakirm111@gmail.com',
+    description='ROS 2 package for testing Differential IK Controller',
+    license='BSD-3-Clause',
     entry_points={
         'console_scripts': [
-            'reach = scripts.reach:main'
+            # Apuntamos al módulo scripts.ik_node
+            'ik_node = reach.ik_node:main',
+            # Si quieres exponer también tu reach.py
+            'reach   = reach.reach:main',
         ],
     },
 )
