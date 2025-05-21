@@ -14,8 +14,6 @@
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>builtin_interfaces</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
-  <exec_depend>urdf_parser_py</exec_depend>
-  <exec_depend>kdl_parser_py</exec_depend>
 
 
   <export>
