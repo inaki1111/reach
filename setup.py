@@ -36,6 +36,8 @@ setup(
             'joint_states_node = reach.joint_states_node:main',
             'moveit_node = reach.moveit_node:main',
             'ur5e_moveit_client = reach.ur5e_moveit_client:main',
+            'static_pose = reach.static_pose:main',
+
         ],
     },
 )

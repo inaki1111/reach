@@ -14,11 +14,11 @@ class PolicyActionSplitter(Node):
         super().__init__('policy_action_splitter')
 
         # Observation structure
-        self.joint_pos = np.zeros(12)
-        self.joint_vel = np.zeros(12)
-        self.object_position = np.zeros(3)
-        self.target_object_position = np.zeros(7)
-        self.last_action = np.zeros(8)  # updated internally each step
+        self.joint_pos = np.zeros(12, dtype=np.float32)
+        self.joint_vel = np.zeros(12, dtype=np.float32)
+        self.object_position = np.zeros(3, dtype=np.float32)
+        self.target_object_position = np.zeros(7, dtype=np.float32)
+        self.last_action = np.zeros(8, dtype=np.float32)  # updated internally each step
 
         # Load the ONNX model
         model_path = str(files("reach").joinpath("policy.onnx"))
@@ -40,50 +40,78 @@ class PolicyActionSplitter(Node):
 
     # --- Callbacks ---
     def joint_pos_cb(self, msg: Float32MultiArray):
-        self.joint_pos = np.array(msg.data[:12])
+        self.joint_pos = np.array(msg.data[:12], dtype=np.float32)
 
     def joint_vel_cb(self, msg: Float32MultiArray):
-        self.joint_vel = np.array(msg.data[:12])
+        self.joint_vel = np.array(msg.data[:12], dtype=np.float32)
 
     def obj_pos_cb(self, msg: Point):
-        self.object_position = np.array([msg.x, msg.y, msg.z])
+        self.object_position = np.array([msg.x, msg.y, msg.z], dtype=np.float32)
 
     def target_pos_cb(self, msg: Pose):
         self.target_object_position = np.array([
             msg.position.x, msg.position.y, msg.position.z,
             msg.orientation.x, msg.orientation.y,
             msg.orientation.z, msg.orientation.w
-        ])
+        ], dtype=np.float32)
 
     # --- Main loop ---
     def compute_action(self):
+        # Build observation vector
         obs = np.concatenate([
-            self.joint_pos,               # (12,)
-            self.joint_vel,              # (12,)
-            self.object_position,        # (3,)
-            self.target_object_position, # (7,)
-            self.last_action             # (8,)
+            self.joint_pos,
+            self.joint_vel,
+            self.object_position,
+            self.target_object_position,
+            self.last_action
         ])
 
         if obs.shape != (42,):
             self.get_logger().warn(f"Incomplete observation vector: {obs.shape}")
             return
 
-        output = self.session.run(None, {self.input_name: obs.astype(np.float32).reshape(1, -1)})[0]
-        action = output[0]  # Expected shape: (8,)
+        # Run inference
+        output = self.session.run(
+            None,
+            {self.input_name: obs.reshape(1, -1).astype(np.float32)}
+        )[0]
+        action = output[0]  # shape (8,)
 
-        # Publish current action
+                # 1) Position deltas: remove scaling to test raw output
+        # scale factor (currently 5cm) can be adjusted here or set to 1.0 to use raw model deltas
+        scale = 1.0
+        dx, dy, dz = action[0:3] * scale
+        # optional clamp if needed:
+        # dx, dy, dz = np.clip([dx, dy, dz], -scale, scale)
+
+        # 2) Orientation: normalize quaternion: normalize quaternion
+        raw_q = action[3:7]
+        norm = np.linalg.norm(raw_q)
+        if norm < 1e-6:
+            qx, qy, qz, qw = 0.0, 0.0, 0.0, 1.0
+        else:
+            qx, qy, qz, qw = (raw_q / norm).tolist()
+
+        # 3) Gripper: clamp (if used later)
+        gripper_val = float(np.clip(action[7], 0.0, 1.0))
+
+        # Publish arm action
         arm_action = Float32MultiArray()
-        arm_action.data = action[:7].tolist()
+        arm_action.data = [float(dx), float(dy), float(dz), qx, qy, qz, qw]
         self.arm_action_pub.publish(arm_action)
 
+        # Publish gripper action unchanged
         gripper_action = Float32()
-        gripper_action.data = float(action[7])
+        gripper_action.data = gripper_val
         self.gripper_action_pub.publish(gripper_action)
 
         # Update last_action for next step
-        self.last_action = np.concatenate([action[:7], [float(action[7])]])
+        arr = [dx, dy, dz, qx, qy, qz, qw, gripper_val]
+        self.last_action = np.array(arr, dtype=np.float32)
 
+        self.get_logger().info(
+            f"Published RL action: pos_delta=[{dx:.3f}, {dy:.3f}, {dz:.3f}], quat=[{qx:.3f}, {qy:.3f}, {qz:.3f}, {qw:.3f}], gripper={gripper_val:.2f}"
+        )
 
 
 def main(args=None):
@@ -92,6 +120,7 @@ def main(args=None):
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()
+
 
 if __name__ == '__main__':
     main()

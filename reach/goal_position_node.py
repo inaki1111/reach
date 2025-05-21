@@ -41,13 +41,13 @@ class GoalObjectPublisher(Node):
         self.object_pub.publish(self.object_pose.position)
 
         goal_axes = PoseStamped()
-        goal_axes.header.frame_id = "base_link"
+        goal_axes.header.frame_id = "world"
         goal_axes.header.stamp = now
         goal_axes.pose = self.goal_pose
         self.goal_axes_pub.publish(goal_axes)
 
         object_axes = PoseStamped()
-        object_axes.header.frame_id = "base_link"
+        object_axes.header.frame_id = "world"
         object_axes.header.stamp = now
         object_axes.pose = self.object_pose
         self.object_axes_pub.publish(object_axes)

@@ -3,51 +3,53 @@
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Float32MultiArray
+from action_msgs.msg import GoalStatus
 import numpy as np
-from .ur5e_moveit_client import UR5eMoveItClient
+from reach.ur5e_moveit_client import UR5eMoveItClient
 
 class ArmActionExecutor(Node):
     def __init__(self):
         super().__init__('arm_action_executor')
-
-        # MoveIt client
         self.client = UR5eMoveItClient()
 
-        # Subscriber to arm_action topic
-        self.subscription = self.create_subscription(
+        # Subscribirnos a la salida de tu RL
+        self.create_subscription(
             Float32MultiArray,
             '/arm_action',
             self.arm_action_cb,
             10
         )
-
+        self.get_logger().info("ArmActionExecutor ready")
 
     def arm_action_cb(self, msg: Float32MultiArray):
-        if len(msg.data) != 7:
-            self.get_logger().warn(f"Received arm_action of invalid size: {len(msg.data)}")
+        data = msg.data
+        if len(data) != 7:
+            self.get_logger().warn(f"Invalid arm_action length: {len(data)}")
             return
 
-        dx, dy, dz = msg.data[0:3]
-        qx, qy, qz, qw = msg.data[3:7]
+        # 1) Extraer solo la parte de traslación y escalar ±5 cm
+        dx, dy, dz = data[:3]
+        dx, dy, dz = np.clip([dx, dy, dz], -0.05, 0.05)
 
-        # Get current pose
-        position, orientation = self.client.get_link_position("tool0")
-        if position is None or orientation is None:
-            self.get_logger().warn("Could not get current end-effector pose.")
+        # 2) Ignorar qx,qy,qz,qw de la política; pillar orientación actual
+        pos, ori = self.client.get_link_position('wrist_3_link')
+        if pos is None or ori is None:
+            self.get_logger().warn("Cannot retrieve current pose/orientation")
             return
+        # ori es una tupla (qx, qy, qz, qw)
 
-        # Apply delta to position
-        new_position = [
-            position[0] + dx,
-            position[1] + dy,
-            position[2] + dz
-        ]
+        # 3) Construir la nueva pose con delta en posición + orientación actual
+        new_pos = [pos[0] + float(dx), pos[1] + float(dy), pos[2] + float(dz)]
+        new_pose = new_pos + list(ori)
 
-        # Use new orientation from the model
-        new_pose = new_position + [qx, qy, qz, qw]
+        # 4) Lanzar la planificación de forma sincrónica y verificar resultado
+        self.get_logger().info(f"Executing small step to {np.round(new_pose,3).tolist()}")
+        status = self.client.move_to_pose(new_pose)
+        if status == GoalStatus.STATUS_SUCCEEDED:
+            self.get_logger().info("✅ Small step executed successfully")
+        else:
+            self.get_logger().error(f"❌ Small step failed with status {status}")
 
-        # Send the pose to MoveIt
-        self.client.move_to_pose(new_pose)
 
 def main(args=None):
     rclpy.init(args=args)
