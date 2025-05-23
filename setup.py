@@ -16,6 +16,8 @@ setup(
         # Install package.xml
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/launch', ['launch/inference.launch.py']),
+        ('share/' + package_name + '/launch', ['launch/servo_ur5e.launch.py']),
+        ('share/' + package_name + '/config', ['config/servo.yaml']),
     ],
 
     install_requires=[

@@ -25,11 +25,11 @@ def generate_launch_description():
             output='screen'
         ),
         # MoveIt integration node
-        launch_ros.actions.Node(
+        """launch_ros.actions.Node(
             package='reach',
             executable='moveit_node',
             name='moveit_node',
             output='screen'
-        ),
+        ),"""
 
     ])

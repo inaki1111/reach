@@ -1,0 +1,20 @@
+ros__parameters:
+  # namespaces (vacíos si no usas prefijos)
+  move_group_namespace: ""
+  robot_namespace: ""
+
+  # tu planning group real en el SRDF del UR5e
+  planning_group: "arm"
+
+  # planner interno (no lo toques normalmente)
+  servo_planner: "ServoPlanning"
+  servo_timeout: 0.5
+
+  # control diferencial: ganancia y tasa
+  cartesian_command_integration_rate: 125.0  # Hz
+  servo_linear_gain: 0.5
+  servo_angular_gain: 1.0
+
+  # límites de velocidad
+  max_linear_velocity: 0.5      # m/s
+  max_angular_velocity: 1.0     # rad/s
