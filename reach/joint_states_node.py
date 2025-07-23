@@ -3,44 +3,71 @@ from rclpy.node import Node
 from sensor_msgs.msg import JointState
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from builtin_interfaces.msg import Duration
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 
 class JointStateToTrajectory(Node):
     def __init__(self):
         super().__init__('joint_states_to_trajectory')
-        # Subscribe to the incoming 12-joint command
+        # QoS for receiving commands: reliable & volatile (default for most publishers)
+        cmd_qos = QoSProfile(
+            depth=10,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.VOLATILE
+        )
+        # QoS for publishing to controller: reliable & transient local (latching)
+        traj_qos = QoSProfile(
+            depth=10,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL
+        )
+
+        # Subscriber for 12-joint commands
         self.subscription = self.create_subscription(
             JointState,
             'joint_states_command',
             self.listener_callback,
-            10)
-        # Publish to the trajectory controller (6 joints)
+            qos_profile=cmd_qos)
+        # Publisher to controller (6 joints)
         self.publisher = self.create_publisher(
             JointTrajectory,
             '/joint_trajectory_controller/joint_trajectory',
-            10)
+            qos_profile=traj_qos)
+
+        # Store last received joint state
+        self.last_positions = None
+        self.joint_names = []
+        # Timer to publish at fixed rate
+        self.timer = self.create_timer(0.1, self.publish_trajectory)  # 10 Hz
 
     def listener_callback(self, msg: JointState):
-        # Ensure there are at least 6 joints in the message
+        # Only take first 6 joints
         if len(msg.position) < 6:
             self.get_logger().warn('Received fewer than 6 joint positions; skipping')
             return
+        self.joint_names = msg.name[:6]
+        # Copy positions
+        self.last_positions = list(msg.position[:6])
+        self.get_logger().debug(f'Received positions: {self.last_positions}')
 
-        # Build the trajectory message
+    def publish_trajectory(self):
+        if not self.last_positions or not self.joint_names:
+            return  # nothing to publish
+
         traj = JointTrajectory()
+        # Stamp now
         traj.header.stamp = self.get_clock().now().to_msg()
-        # Take only the first 6 joint names and positions
-        traj.joint_names = msg.name[:6]
+        traj.joint_names = self.joint_names
 
         point = JointTrajectoryPoint()
-        point.positions = list(msg.position[:6])
-        # Immediate execution (time_from_start = 0)
-        point.time_from_start = Duration(sec=0, nanosec=0)
-
+        point.positions = self.last_positions
+        # Small buffer into future
+        point.time_from_start = Duration(sec=0, nanosec=200_000_000)
         traj.points = [point]
 
-        # Publish to the controller
         self.publisher.publish(traj)
-        self.get_logger().info(f'Published trajectory for joints: {traj.joint_names}')
+        self.get_logger().info(
+            f'Published to controller: {traj.joint_names} @ ' 
+            f'{traj.header.stamp.sec}.{traj.header.stamp.nanosec}')
 
 
 def main(args=None):
